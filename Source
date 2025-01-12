@@ -1,11 +1,14 @@
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
-local Window = Library.CreateLib("Booth Sniper Pro", "DarkTheme")
+local Window = Library.CreateLib("Booth Sniper Pro (Mobile)", "DarkTheme")
 
 local HttpService = game:GetService("HttpService")
 local BoothService = game:GetService("Workspace"):FindFirstChild("Booths")
 local TeleportService = game:GetService("TeleportService")
 local Player = game:GetService("Players").LocalPlayer
+local Camera = game:GetService("Workspace").CurrentCamera
 local PlaceId = game.PlaceId
+
+repeat wait() until Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
 
 local SniperSettings = {
     maxPrice = 1000,
@@ -33,17 +36,17 @@ local HugePets = {
 local Tab = Window:NewTab("Auto-Snipe")
 local Section = Tab:NewSection("Sniper Settings")
 
-Section:NewTextBox("Max Price", "Set the max price for items", function(value)
+Section:NewTextBox("Max Price", "Set the max price for pets", function(value)
     SniperSettings.maxPrice = tonumber(value)
 end)
 
-Section:NewButton("Start Sniping", "Starts the auto-sniper", function()
+Section:NewButton("Start Sniping", "Start the sniper", function()
     SniperSettings.snipeEnabled = true
     logMessage("[INFO]", "Auto-sniper started!")
     autoSniper()
 end)
 
-Section:NewButton("Stop Sniping", "Stops the auto-sniper", function()
+Section:NewButton("Stop Sniping", "Stop the sniper", function()
     SniperSettings.snipeEnabled = false
     logMessage("[INFO]", "Auto-sniper stopped!")
 end)
@@ -52,7 +55,7 @@ local HugeTab = Window:NewTab("Huge Pets")
 local HugeSection = HugeTab:NewSection("Select Huge Pets to Snipe")
 
 for _, pet in pairs(HugePets) do
-    HugeSection:NewToggle(pet, "Toggle to snipe " .. pet, function(state)
+    HugeSection:NewToggle(pet, "Enable/disable sniping for " .. pet, function(state)
         SniperSettings.selectedExclusives[pet] = state
         logMessage("[SELECT]", "Snipe " .. (state and "enabled" or "disabled") .. " for " .. pet)
     end)
@@ -60,7 +63,7 @@ end
 
 local LogsTab = Window:NewTab("Logs")
 local LogsSection = LogsTab:NewSection("Sniping Logs")
-LogsSection:NewButton("Clear Logs", "Clear all log messages", function()
+LogsSection:NewButton("Clear Logs", "Clear all logs", function()
     for _, element in pairs(LogsSection:GetChildren()) do
         element:Destroy()
     end
@@ -76,15 +79,14 @@ function isNameMatch(selectedName, petName)
     return string.lower(petName):find(string.lower(selectedName)) ~= nil
 end
 
-function teleportToBooth(booth)
+function moveCameraToBooth(booth)
     if booth:FindFirstChild("HumanoidRootPart") then
-        Player.Character:SetPrimaryPartCFrame(booth.HumanoidRootPart.CFrame + Vector3.new(0, 5, 0))
-        wait(0.2)
+        Camera.CFrame = booth.HumanoidRootPart.CFrame + Vector3.new(0, 10, -15)
     end
 end
 
 function serverHop()
-    logMessage("[INFO]", "Server hopping...")
+    logMessage("[INFO]", "No items found, hopping to a new server.")
     local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")).data
     for _, server in ipairs(servers) do
         if server.id ~= game.JobId and server.playing < server.maxPlayers then
@@ -98,14 +100,29 @@ function autoSniper()
     while SniperSettings.snipeEnabled do
         local foundItem = false
         for _, booth in pairs(BoothService:GetChildren()) do
-            teleportToBooth(booth)
+            moveCameraToBooth(booth)
+            wait(0.3)
+
             local boothOwner = booth:FindFirstChild("Owner")
             local items = booth:FindFirstChild("PetsForSale")
+            local buyButton = booth:FindFirstChild("BuyButton")
 
-            if boothOwner and items then
+            if not boothOwner then
+                logMessage("[ERROR]", "No owner found for booth: " .. booth.Name)
+            end
+            if not items then
+                logMessage("[ERROR]", "No pets for sale in booth: " .. booth.Name)
+            end
+            if not buyButton then
+                logMessage("[ERROR]", "No buy button detected in booth: " .. booth.Name)
+            end
+
+            if boothOwner and items and buyButton then
                 for _, pet in pairs(items:GetChildren()) do
                     local price = pet:FindFirstChild("Price") and pet.Price.Value or 0
                     local petName = pet:FindFirstChild("Name") and pet.Name.Value or "Unknown Item"
+
+                    logMessage("[DEBUG]", "Found pet: " .. petName .. " for " .. price .. " gems")
 
                     for selectedPet, enabled in pairs(SniperSettings.selectedExclusives) do
                         if enabled and isNameMatch(selectedPet, petName) and price <= SniperSettings.maxPrice then
@@ -120,8 +137,6 @@ function autoSniper()
 
         if not foundItem then
             serverHop()
-        else
-            wait(0.5)
         end
     end
 end
@@ -132,23 +147,13 @@ function buyPet(booth, pet)
         if buyButton then
             fireclickdetector(buyButton.ClickDetector)
             logMessage("[INFO]", "Successfully purchased " .. pet.Name.Value)
-            print("[INFO] Successfully purchased " .. pet.Name.Value)
-            wait(2)
+            wait(1.5)
         else
-            logMessage("[ERROR]", "No buy button detected for " .. pet.Name.Value)
-            print("[ERROR] No buy button detected for " .. pet.Name.Value)
+            logMessage("[ERROR]", "Failed to find the buy button.")
         end
     end)
 
     if not success then
         logMessage("[ERROR]", "Purchase failed: " .. tostring(err))
-        print("[ERROR] Purchase failed: " .. tostring(err))
     end
 end
-
-local UIS = game:GetService("UserInputService")
-UIS.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.P then
-        Window:Toggle(not Window.Enabled)
-    end
-end)
