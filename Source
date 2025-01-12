@@ -1,44 +1,128 @@
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("Booth Sniper Pro", "DarkTheme")
+
 local HttpService = game:GetService("HttpService")
-local UserInputService = game:GetService("UserInputService")
-local TeleportService = game:GetService("TeleportService")
-local Window = Library.CreateLib("Improved Pets Go Sniper", "DarkTheme")
+local BoothService = game:GetService("Workspace"):FindFirstChild("Booths")
+local Player = game:GetService("Players").LocalPlayer
 
-local Tab = Window:NewTab("Sniper")
-local Section = Tab:NewSection("Sniper Configuration")
+local SniperSettings = {
+    maxPrice = 1000,
+    snipeEnabled = false,
+    selectedExclusives = {},
+}
 
-local iconGui = Instance.new("ScreenGui")
-iconGui.Parent = game.CoreGui
-iconGui.Name = "SniperToggleUI"
+local HugePets = {
+    "Huge Cat",
+    "Huge Dalmatian",
+    "Huge Dog",
+    "Huge Calico Cat",
+    "Huge Shiba",
+    "Huge Dragon",
+    "Huge Nightmare Corgi",
+    "Huge Inferno Cat",
+    "Huge Mosaic Griffin",
+    "Huge Red Dragon",
+    "Huge Cosmic Axolotl",
+    "Huge Fossil Dragon",
+    "Huge Kitsune Fox",
+    "Huge Hell Rock"
+}
 
-local iconButton = Instance.new("ImageButton")
-iconButton.Size = UDim2.new(0, 70, 0, 70)
-iconButton.Position = UDim2.new(0.05, 0, 0.05, 0)
-iconButton.Image = "rbxassetid://6031075938"
-iconButton.BackgroundTransparency = 1
-iconButton.Parent = iconGui
-iconButton.Draggable = true
+local Tab = Window:NewTab("Auto-Snipe")
+local Section = Tab:NewSection("Sniper Settings")
 
-local isUIVisible = true
-
-iconButton.MouseButton1Click:Connect(function()
-    isUIVisible = not isUIVisible
-    Window:Toggle(isUIVisible)
+Section:NewTextBox("Max Price", "Set the max price for items", function(value)
+    SniperSettings.maxPrice = tonumber(value)
 end)
 
-Section:NewLabel("💎 Set your total gem budget for purchases:")
-Section:NewTextBox("Enter your budget (e.g., 1000 gems)", "Budget", function(value)
-    getgenv().savedSettings.budget = tonumber(value) or 0
+Section:NewButton("Start Sniping", "Starts the auto-sniper", function()
+    SniperSettings.snipeEnabled = true
+    logMessage("[INFO]", "Auto-sniper started!")
+    autoSniper()
 end)
 
-Section:NewButton("Save Settings", "Saves sniper settings", function()
-    print("Settings saved!")
+Section:NewButton("Stop Sniping", "Stops the auto-sniper", function()
+    SniperSettings.snipeEnabled = false
+    logMessage("[INFO]", "Auto-sniper stopped!")
 end)
 
-Section:NewButton("Start Sniping", "Starts the sniper!", function()
-    print("Sniper Started!")
+local HugeTab = Window:NewTab("Huge Pets")
+local HugeSection = HugeTab:NewSection("Select Huge Pets to Snipe")
+
+for _, pet in pairs(HugePets) do
+    HugeSection:NewToggle(pet, "Toggle to snipe " .. pet, function(state)
+        SniperSettings.selectedExclusives[pet] = state
+        logMessage("[SELECT]", "Snipe " .. (state and "enabled" or "disabled") .. " for " .. pet)
+    end)
+end
+
+local LogsTab = Window:NewTab("Logs")
+local LogsSection = LogsTab:NewSection("Sniping Logs")
+LogsSection:NewButton("Clear Logs", "Clear all log messages", function()
+    for _, element in pairs(LogsSection:GetChildren()) do
+        element:Destroy()
+    end
+    logMessage("[INFO]", "Logs cleared.")
 end)
 
-Section:NewButton("Stop Sniping", "Stops the sniper!", function()
-    print("Sniper Stopped!")
+function logMessage(tag, message)
+    local color = {
+        ["[INFO]"] = Color3.fromRGB(0, 255, 0),
+        ["[ERROR]"] = Color3.fromRGB(255, 0, 0),
+        ["[SELECT]"] = Color3.fromRGB(0, 191, 255),
+        ["[SNIPE]"] = Color3.fromRGB(255, 255, 0)
+    }
+    LogsSection:NewLabel(string.format("[%s] %s", tag, message))
+end
+
+function isNameMatch(selectedName, petName)
+    return string.lower(petName):find(string.lower(selectedName)) ~= nil
+end
+
+function autoSniper()
+    while SniperSettings.snipeEnabled do
+        wait(1)
+        for _, booth in pairs(BoothService:GetChildren()) do
+            local boothOwner = booth:FindFirstChild("Owner")
+            local items = booth:FindFirstChild("PetsForSale")
+
+            if boothOwner and items then
+                for _, pet in pairs(items:GetChildren()) do
+                    local price = pet:FindFirstChild("Price") and pet.Price.Value or 0
+                    local petName = pet:FindFirstChild("Name") and pet.Name.Value or "Unknown Item"
+
+                    for selectedPet, enabled in pairs(SniperSettings.selectedExclusives) do
+                        if enabled and isNameMatch(selectedPet, petName) and price <= SniperSettings.maxPrice then
+                            logMessage("[SNIPE]", "Attempting to buy " .. petName .. " for " .. price .. " gems")
+                            buyPet(booth, pet)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+function buyPet(booth, pet)
+    local success, err = pcall(function()
+        local buyButton = booth:FindFirstChild("BuyButton")
+        if buyButton then
+            fireclickdetector(buyButton.ClickDetector)
+            logMessage("[INFO]", "Successfully purchased " .. pet.Name.Value)
+            wait(10) -- Cooldown of 10 seconds after purchase
+        else
+            logMessage("[ERROR]", "No buy button detected for " .. pet.Name.Value)
+        end
+    end)
+
+    if not success then
+        logMessage("[ERROR]", "Purchase failed: " .. tostring(err))
+    end
+end
+
+local UIS = game:GetService("UserInputService")
+UIS.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.P then
+        Window:Toggle(not Window.Enabled)
+    end
 end)
