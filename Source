@@ -1,12 +1,40 @@
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
 local Window = Library.CreateLib("Booth Sniper Pro (Mobile)", "DarkTheme")
 
+-- Main UI toggle button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 100, 0, 40)
+toggleButton.Position = UDim2.new(0, 10, 0, 10)
+toggleButton.Text = "Open Sniper"
+toggleButton.Parent = game:GetService("CoreGui")
+toggleButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.Visible = true
+
+local isMinimized = true
+
+-- Function to toggle UI visibility
+local function toggleUI()
+    if isMinimized then
+        Window:Toggle(true)
+        toggleButton.Text = "Close Sniper"
+    else
+        Window:Toggle(false)
+        toggleButton.Text = "Open Sniper"
+    end
+    isMinimized = not isMinimized
+end
+
+-- Button click to show/hide UI
+toggleButton.MouseButton1Click:Connect(toggleUI)
+
 local HttpService = game:GetService("HttpService")
 local BoothService = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
 local Player = game:GetService("Players").LocalPlayer
 local Camera = game:GetService("Workspace").CurrentCamera
 local PlaceId = game.PlaceId
+local SettingsFile = "BoothSniperSettings.json"
 
 repeat wait() until Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
 
@@ -15,6 +43,27 @@ local SniperSettings = {
     snipeEnabled = false,
     selectedExclusives = {},
 }
+
+-- Functions to save/load settings and all the UI logic remain the same...
+
+function saveSettings()
+    local settingsToSave = {
+        maxPrice = SniperSettings.maxPrice,
+        selectedExclusives = SniperSettings.selectedExclusives,
+    }
+    writefile(SettingsFile, HttpService:JSONEncode(settingsToSave))
+end
+
+function loadSettings()
+    if isfile(SettingsFile) then
+        local loadedSettings = HttpService:JSONDecode(readfile(SettingsFile))
+        SniperSettings.maxPrice = loadedSettings.maxPrice or 1000
+        SniperSettings.selectedExclusives = loadedSettings.selectedExclusives or {}
+        logMessage("[INFO]", "Settings loaded successfully.")
+    end
+end
+
+loadSettings()
 
 local HugePets = {
     "Huge Cat",
@@ -38,6 +87,7 @@ local Section = Tab:NewSection("Sniper Settings")
 
 Section:NewTextBox("Max Price", "Set the max price for pets", function(value)
     SniperSettings.maxPrice = tonumber(value)
+    saveSettings()
 end)
 
 Section:NewButton("Start Sniping", "Start the sniper", function()
@@ -61,6 +111,7 @@ local HugeSection = HugeTab:NewSection("Select Huge Pets to Snipe")
 for _, pet in pairs(HugePets) do
     HugeSection:NewToggle(pet, "Enable/disable sniping for " .. pet, function(state)
         SniperSettings.selectedExclusives[pet] = state
+        saveSettings()
         logMessage("[SELECT]", "Snipe " .. (state and "enabled" or "disabled") .. " for " .. pet)
     end)
 end
@@ -96,6 +147,9 @@ function serverHop()
     for _, server in ipairs(servers) do
         if server.id ~= game.JobId and server.playing < server.maxPlayers then
             TeleportService:TeleportToPlaceInstance(PlaceId, server.id)
+            wait(5)
+            logMessage("[INFO]", "Reloading sniper after server hop.")
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/YourScriptLink"))()
             break
         end
     end
