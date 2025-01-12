@@ -3,7 +3,9 @@ local Window = Library.CreateLib("Booth Sniper Pro", "DarkTheme")
 
 local HttpService = game:GetService("HttpService")
 local BoothService = game:GetService("Workspace"):FindFirstChild("Booths")
+local TeleportService = game:GetService("TeleportService")
 local Player = game:GetService("Players").LocalPlayer
+local PlaceId = game.PlaceId
 
 local SniperSettings = {
     maxPrice = 1000,
@@ -66,23 +68,37 @@ LogsSection:NewButton("Clear Logs", "Clear all log messages", function()
 end)
 
 function logMessage(tag, message)
-    local color = {
-        ["[INFO]"] = Color3.fromRGB(0, 255, 0),
-        ["[ERROR]"] = Color3.fromRGB(255, 0, 0),
-        ["[SELECT]"] = Color3.fromRGB(0, 191, 255),
-        ["[SNIPE]"] = Color3.fromRGB(255, 255, 0)
-    }
     LogsSection:NewLabel(string.format("[%s] %s", tag, message))
+    print(tag, message)
 end
 
 function isNameMatch(selectedName, petName)
     return string.lower(petName):find(string.lower(selectedName)) ~= nil
 end
 
+function teleportToBooth(booth)
+    if booth:FindFirstChild("HumanoidRootPart") then
+        Player.Character:SetPrimaryPartCFrame(booth.HumanoidRootPart.CFrame + Vector3.new(0, 5, 0))
+        wait(0.2)
+    end
+end
+
+function serverHop()
+    logMessage("[INFO]", "Server hopping...")
+    local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")).data
+    for _, server in ipairs(servers) do
+        if server.id ~= game.JobId and server.playing < server.maxPlayers then
+            TeleportService:TeleportToPlaceInstance(PlaceId, server.id)
+            break
+        end
+    end
+end
+
 function autoSniper()
     while SniperSettings.snipeEnabled do
-        wait(1)
+        local foundItem = false
         for _, booth in pairs(BoothService:GetChildren()) do
+            teleportToBooth(booth)
             local boothOwner = booth:FindFirstChild("Owner")
             local items = booth:FindFirstChild("PetsForSale")
 
@@ -95,10 +111,17 @@ function autoSniper()
                         if enabled and isNameMatch(selectedPet, petName) and price <= SniperSettings.maxPrice then
                             logMessage("[SNIPE]", "Attempting to buy " .. petName .. " for " .. price .. " gems")
                             buyPet(booth, pet)
+                            foundItem = true
                         end
                     end
                 end
             end
+        end
+
+        if not foundItem then
+            serverHop()
+        else
+            wait(0.5)
         end
     end
 end
@@ -109,14 +132,17 @@ function buyPet(booth, pet)
         if buyButton then
             fireclickdetector(buyButton.ClickDetector)
             logMessage("[INFO]", "Successfully purchased " .. pet.Name.Value)
-            wait(10) -- Cooldown of 10 seconds after purchase
+            print("[INFO] Successfully purchased " .. pet.Name.Value)
+            wait(2)
         else
             logMessage("[ERROR]", "No buy button detected for " .. pet.Name.Value)
+            print("[ERROR] No buy button detected for " .. pet.Name.Value)
         end
     end)
 
     if not success then
         logMessage("[ERROR]", "Purchase failed: " .. tostring(err))
+        print("[ERROR] Purchase failed: " .. tostring(err))
     end
 end
 
